@@ -26,10 +26,11 @@ Next, make sure you have the storm-starter code available on your machine.  Git/
 following command to download the latest storm-starter code and change to the new directory that contains the downloaded
 code.
 
-    $ git clone git://github.com/apache/incubator-storm.git && cd storm/examples/storm-starter
+    $ git clone git://github.com/apache/incubator-storm.git && cd incubator-storm/examples/storm-starter
 
 
 ## storm-starter overview
+
 
 storm-starter contains a variety of examples of using Storm.  If this is your first time working with Storm, check out
 these topologies first:
@@ -47,16 +48,6 @@ If you want to learn more about how Storm works, please head over to the
 [Storm project page](http://storm.incubator.apache.org).
 
 
-<a name="leiningen"></a>
-
-# Using storm-starter with Leiningen
-
-## Install Leiningen
-
-The storm-starter build uses [Leiningen](http://leiningen.org/) 2.0.  Install Leiningen by following the
-[leiningen installation instructions](https://github.com/technomancy/leiningen).
-
-
 <a name="maven"></a>
 
 # Using storm-starter with Maven
@@ -65,6 +56,20 @@ The storm-starter build uses [Leiningen](http://leiningen.org/) 2.0.  Install Le
 
 Install [Maven](http://maven.apache.org/) (preferably version 3.x) by following
 the [Maven installation instructions](http://maven.apache.org/download.cgi).
+
+
+## Build and install Storm jars locally
+
+If you are using the latest development version of Storm, e.g. by having cloned the Storm git repository,
+then you must first perform a local build of Storm itself.  Otherwise you will run into Maven errors such as
+"Could not resolve dependencies for project `org.apache.storm:storm-starter:<storm-version>-SNAPSHOT`".
+
+    # Must be run from the top-level directory of the Storm code repository
+    $ mvn clean install -DskipTests=true
+
+This command will build Storm locally and install its jar files to your user's `$HOME/.m2/repository/`.  When you run
+the Maven command to build and run storm-starter (see below), Maven will then be able to find the corresponding version
+of Storm in this local Maven repository at `$HOME/.m2/repository`.
 
 
 ## Running topologies with Maven
@@ -77,6 +82,10 @@ compile and run `WordCountTopology` in local mode, use the command:
 You can also run clojure topologies with Maven:
 
     $ mvn compile exec:java -Dstorm.topology=storm.starter.clj.word_count
+
+In Windows parameter should be quoted, like this:
+
+    $ mvn compile exec:java "-Dstorm.topology=storm.starter.clj.word_count"
 
 ## Packaging storm-starter for use on a Storm cluster
 
@@ -106,7 +115,7 @@ The following instructions will import storm-starter as a new project in Intelli
 
 
 * Open _File > Import Project..._ and navigate to the storm-starter directory of your storm clone (e.g.
-  `~/git/storm/examples/storm-starter`).
+  `~/git/incubator-storm/examples/storm-starter`).
 * Select _Import project from external model_, select "Maven", and click _Next_.
 * In the following screen, enable the checkbox _Import Maven projects automatically_.  Leave all other values at their
   defaults.  Click _Next_.

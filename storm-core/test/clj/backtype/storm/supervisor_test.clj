@@ -15,10 +15,12 @@
 ;; limitations under the License.
 (ns backtype.storm.supervisor-test
   (:use [clojure test])
+  (:require [clojure [string :as string]])
   (:import [backtype.storm.testing TestWordCounter TestWordSpout TestGlobalCount TestAggregatesCounter])
-  (:use [backtype.storm bootstrap testing])
+  (:use [backtype.storm bootstrap config testing])
   (:use [backtype.storm.daemon common])
   (:require [backtype.storm.daemon [worker :as worker] [supervisor :as supervisor]])
+  (:use [conjure core])
   )
 
 (bootstrap)
@@ -238,6 +240,101 @@
       (check-heartbeat cluster "sup" 3)
 
       )))
+
+(deftest test-worker-launch-command
+  (testing "*.worker.childopts configuration"
+    (let [mock-port "42"
+          mock-storm-id "fake-storm-id"
+          mock-worker-id "fake-worker-id"
+          mock-cp "/base:/stormjar.jar"
+          exp-args-fn (fn [opts topo-opts classpath]
+                       (concat [(supervisor/java-cmd) "-server"]
+                               opts
+                               topo-opts
+                               ["-Djava.library.path="
+                                (str "-Dlogfile.name=worker-" mock-port ".log")
+                                "-Dstorm.home="
+                                "-Dlogback.configurationFile=/logback/cluster.xml"
+                                (str "-Dstorm.id=" mock-storm-id)
+                                (str "-Dworker.id=" mock-worker-id)
+                                (str "-Dworker.port=" mock-port)
+                                "-cp" classpath
+                                "backtype.storm.daemon.worker"
+                                mock-storm-id
+                                mock-port
+                                mock-worker-id]))]
+      (testing "testing *.worker.childopts as strings with extra spaces"
+        (let [string-opts "-Dfoo=bar  -Xmx1024m"
+              topo-string-opts "-Dkau=aux   -Xmx2048m"
+              exp-args (exp-args-fn ["-Dfoo=bar" "-Xmx1024m"]
+                                    ["-Dkau=aux" "-Xmx2048m"]
+                                    mock-cp)
+              mock-supervisor {:conf {STORM-CLUSTER-MODE :distributed
+                                      WORKER-CHILDOPTS string-opts}}]
+          (stubbing [read-supervisor-storm-conf {TOPOLOGY-WORKER-CHILDOPTS
+                                                   topo-string-opts}
+                     add-to-classpath mock-cp
+                     supervisor-stormdist-root nil
+                     supervisor/jlp nil
+                     launch-process nil]
+            (supervisor/launch-worker mock-supervisor
+                                      mock-storm-id
+                                      mock-port
+                                      mock-worker-id)
+            (verify-first-call-args-for-indices launch-process
+                                                [0]
+                                                exp-args))))
+      (testing "testing *.worker.childopts as list of strings, with spaces in values"
+        (let [list-opts '("-Dopt1='this has a space in it'" "-Xmx1024m")
+              topo-list-opts '("-Dopt2='val with spaces'" "-Xmx2048m")
+              exp-args (exp-args-fn list-opts topo-list-opts mock-cp)
+              mock-supervisor {:conf {STORM-CLUSTER-MODE :distributed
+                                      WORKER-CHILDOPTS list-opts}}]
+          (stubbing [read-supervisor-storm-conf {TOPOLOGY-WORKER-CHILDOPTS
+                                                   topo-list-opts}
+                     add-to-classpath mock-cp
+                     supervisor-stormdist-root nil
+                     supervisor/jlp nil
+                     launch-process nil]
+            (supervisor/launch-worker mock-supervisor
+                                      mock-storm-id
+                                      mock-port
+                                      mock-worker-id)
+            (verify-first-call-args-for-indices launch-process
+                                                [0]
+                                                exp-args))))
+      (testing "testing topology.classpath is added to classpath"
+        (let [topo-cp "/any/path"
+              exp-args (exp-args-fn [] [] (add-to-classpath mock-cp [topo-cp]))
+              mock-supervisor {:conf {STORM-CLUSTER-MODE :distributed}}]
+          (stubbing [read-supervisor-storm-conf {TOPOLOGY-CLASSPATH topo-cp}
+                     supervisor-stormdist-root nil
+                     supervisor/jlp nil
+                     launch-process nil
+                     current-classpath "/base"]
+                    (supervisor/launch-worker mock-supervisor
+                                              mock-storm-id
+                                              mock-port
+                                              mock-worker-id)
+                    (verify-first-call-args-for-indices launch-process
+                                                        [0]
+                                                        exp-args))))
+      (testing "testing topology.environment is added to environment for worker launch"
+        (let [topo-env {"THISVAR" "somevalue" "THATVAR" "someothervalue"}
+              exp-args (exp-args-fn [] [] mock-cp)
+              mock-supervisor {:conf {STORM-CLUSTER-MODE :distributed}}]
+          (stubbing [read-supervisor-storm-conf {TOPOLOGY-ENVIRONMENT topo-env}
+                     supervisor-stormdist-root nil
+                     supervisor/jlp nil
+                     launch-process nil
+                     current-classpath "/base"]
+                    (supervisor/launch-worker mock-supervisor
+                                              mock-storm-id
+                                              mock-port
+                                              mock-worker-id)
+                    (verify-first-call-args-for-indices launch-process
+                                                        [2]
+                                                        (merge topo-env {"LD_LIBRARY_PATH" nil}))))))))
 
 (deftest test-workers-go-bananas
   ;; test that multiple workers are started for a port, and test that
